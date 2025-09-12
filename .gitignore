@@ -16,7 +16,7 @@ wheels/
 *cache*
 .datasets/
 LLM-AggreFact_subset/
-results/
+#results/
 
 # Huge model
 # Available on https://sdl.ist.osaka-u.ac.jp/~r-okamot/3nli_trained_roberta_large

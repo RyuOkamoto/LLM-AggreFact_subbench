@@ -27,7 +27,7 @@ nltk.download("punkt")
 SUBSET_SAVE_PATH = "LLM-AggreFact_subset"
 DATASET_POSITIVE_LABEL = 1
 
-MAX_SNENTENCE = 1  # L in the formular for RQ1
+MAX_SNENTENCE = 5  # L in the formular for RQ1
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 EVAL_BATCH_SIZE = 16
 
@@ -37,7 +37,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 def main():
     llm_aggrefact_subset = (
-        load_from_disk(SUBSET_SAVE_PATH).shuffle(42).select(range(30))
+        load_from_disk(SUBSET_SAVE_PATH).shuffle(42).select(range(10_000))
     )
 
     # our fine-tunined NLI model
