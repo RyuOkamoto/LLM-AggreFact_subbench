@@ -27,8 +27,8 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 def main():
     llm_aggrefact_subset = concatenate_datasets(
         [
-            load_dataset(HF_DATASET_PATH, split="dev", cache_dir=".datasets"),
-            load_dataset(HF_DATASET_PATH, split="test", cache_dir=".datasets"),
+            load_dataset(HF_DATASET_PATH, split="dev"),
+            load_dataset(HF_DATASET_PATH, split="test"),
         ]
     ).filter(
         is_claim_composed_of_one_sentence, batched=True, batch_size=512, num_proc=4
