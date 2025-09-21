@@ -63,7 +63,7 @@ def main():
     minicheck_flan_T5 = MiniCheck(
         model_path_or_name="lytang/MiniCheck-Flan-T5-Large",
         device=DEVICE,
-        batch_size=EVAL_BATCH_SIZE,
+        batch_size=EVAL_BATCH_SIZE // 4,
     )
 
     # roberta-large MiniCheck
@@ -81,8 +81,8 @@ def main():
     # )
 
     models = [
-        ("our_trained_roberta", our_trained_roberta),
-        ("pretrained_roberta", pretrained_roberta),
+        # ("our_trained_roberta", our_trained_roberta),
+        # ("pretrained_roberta", pretrained_roberta),
         ("minicheck_flan_T5", minicheck_flan_T5),
         ("minicheck_roberta", minicheck_roberta),
         # ("minicheck_deberta", minicheck_deberta),
