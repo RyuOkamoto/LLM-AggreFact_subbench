@@ -37,11 +37,11 @@ def main():
     llm_aggrefact_subset = load_from_disk(SUBSET_PATH)
 
     scoreres: Scorer = [
+        MiniCheckDeBERTa(),
         OurTrainedRoBERTa(),
         PreTrainedRoBERTa(),
         MiniCheckRoBERTa(),
         MiniCheckFlanT5(),
-        MiniCheckDeBERTa(),
     ]
 
     for scorer in scoreres:

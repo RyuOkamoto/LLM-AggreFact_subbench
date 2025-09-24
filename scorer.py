@@ -261,7 +261,15 @@ class MiniCheckFlanT5(Scorer):
             current_chunk = []
             current_word_count = 0
             for sentence in lst:
-                sentence_word_count = len(sentence.split())
+                sentence_word_count = len(
+                    self.tokenizer(
+                        sentence,
+                        padding=False,
+                        add_special_tokens=False,
+                        max_length=self.max_model_len,
+                        truncation=True,
+                    )["input_ids"]
+                )
                 if current_word_count + sentence_word_count > n:
                     yield " ".join(current_chunk)
                     current_chunk = [sentence]
