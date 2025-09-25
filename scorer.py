@@ -12,7 +12,7 @@ from transformers import (
 )
 
 DEFAULT_DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-DEFAULT_BATCH_SIZE = 8
+DEFAULT_BATCH_SIZE = 4
 
 
 def generate_chunks(text: str, chunk_size: int) -> Generator[str, None, None]:

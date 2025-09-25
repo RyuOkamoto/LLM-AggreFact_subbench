@@ -4,7 +4,6 @@ from typing import Dict, List
 
 import matplotlib.pyplot as plt
 import nltk
-import numpy as np
 import seaborn as sns
 from datasets import Dataset, concatenate_datasets, load_dataset
 from dotenv import load_dotenv
@@ -25,13 +24,17 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 def main():
-    llm_aggrefact_subset = concatenate_datasets(
-        [
-            load_dataset(HF_DATASET_PATH, split="dev"),
-            load_dataset(HF_DATASET_PATH, split="test"),
-        ]
-    ).filter(
-        is_claim_composed_of_one_sentence, batched=True, batch_size=512, num_proc=4
+    llm_aggrefact_subset = (
+        concatenate_datasets(
+            [
+                load_dataset(HF_DATASET_PATH, split="dev"),
+                load_dataset(HF_DATASET_PATH, split="test"),
+            ]
+        )
+        .filter(
+            is_claim_composed_of_one_sentence, batched=True, batch_size=512, num_proc=4
+        )
+        .filter(is_doc_composed_of_kilo_words, batched=True, batch_size=512, num_proc=4)
     )
     llm_aggrefact_subset.save_to_disk(SUBSET_SAVE_PATH, num_proc=4)
     visualize_distribution(llm_aggrefact_subset)
@@ -40,6 +43,14 @@ def main():
 def is_claim_composed_of_one_sentence(batch: Dict[str, List]) -> List[bool]:
     claims = batch["claim"]
     return [len(sent_tokenize(claim)) == 1 for claim in claims]
+
+
+def is_doc_composed_of_kilo_words(batch: Dict[str, List]) -> List[bool]:
+    docs = batch["doc"]
+    return [
+        len(word_tokenize(doc)) >= 1_000 and len(word_tokenize(doc)) < 10_000
+        for doc in docs
+    ]
 
 
 def visualize_distribution(dataset: Dataset):
@@ -51,21 +62,13 @@ def visualize_distribution(dataset: Dataset):
     doc_words_nums = result["doc_words_nums"]
     claim_words_nums = result["claim_words_nums"]
 
-    def drop_top_percent(data, percent=1):
-        cutoff = np.percentile(data, 100 - percent)
-        return [x for x in data if x <= cutoff]
-
-    doc_sents_nums = drop_top_percent(doc_sents_nums, percent=1)
-    doc_words_nums = drop_top_percent(doc_words_nums, percent=1)
-    claim_words_nums = drop_top_percent(claim_words_nums, percent=1)
-
     fig, axes = plt.subplots(nrows=1, ncols=3, figsize=(18, 5))
     sns.histplot(doc_sents_nums, ax=axes[0], bins=50, kde=True)
     sns.histplot(doc_words_nums, ax=axes[1], bins=50, color="orange", kde=True)
     sns.histplot(claim_words_nums, ax=axes[2], bins=50, color="orange", kde=True)
-    axes[0].set_title("Document Sentence Count Distribution ($\\leq$ 99%)")
-    axes[1].set_title("Document Word Count Distribution ($\\leq$ 99%)")
-    axes[2].set_title("Claim Word Count Distribution ($\\leq$ 99%)")
+    axes[0].set_title("Document Sentence Count Distribution")
+    axes[1].set_title("Document Word Count Distribution")
+    axes[2].set_title("Claim Word Count Distribution")
     png_path = OUTPUT_DIR / "data_distribution.png"
     pdf_path = OUTPUT_DIR / "data_distribution.pdf"
     fig.savefig(png_path)

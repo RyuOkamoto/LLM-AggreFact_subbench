@@ -34,7 +34,7 @@ OUTPUT_DIR.mkdir(exist_ok=True)
 
 
 def main():
-    llm_aggrefact_subset = load_from_disk(SUBSET_PATH)
+    llm_aggrefact_subset = load_from_disk(SUBSET_PATH).shuffle(seed=42)
 
     scoreres: Scorer = [
         MiniCheckDeBERTa(),
