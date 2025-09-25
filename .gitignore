@@ -19,5 +19,5 @@ LLM-AggreFact_subset/
 #results/
 
 # Huge model
-# Available on https://sdl.ist.osaka-u.ac.jp/~r-okamot/3nli_trained_roberta_large
-3nli_trained_roberta_large/
+# Available on https://sdl.ist.osaka-u.ac.jp/~r-okamot/our_trained_roberta_large
+our_trained_roberta_large/
