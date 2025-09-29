@@ -87,7 +87,7 @@ class XBERTForNLI(Scorer):
             revision="main",
             ignore_mismatched_sizes=False,
         )
-        self.entailment_label = label2id.get("entailment", 1)
+        self.entailment_label = label2id.get("entailment", 0)
         self.device = device
         self.batch_size = batch_size
         self.default_chunk_size = (
