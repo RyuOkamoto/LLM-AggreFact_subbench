@@ -47,57 +47,23 @@ def sent_tokenize_with_newlines(text: str) -> List[str]:
 
 # wrapper class for model to be evaluated
 class Scorer(ABC):
-    @property
-    @abstractmethod
-    def model_path(self) -> str:
-        pass
-
-    @property
-    def model_name(self) -> str:
-        return self.model_path.split("/")[-1]
-
-    @abstractmethod
-    def score(self, doc: str, claim: str) -> float:
-        pass
-
-
-class XBERTForNLI(Scorer):
     def __init__(
-        self,
-        max_model_len: int,
-        label2id: Dict,
-        device: str,
-        batch_size: int,
+        self, model_path: str, max_model_len: int, device: str, batch_size: int
     ):
-        self.max_model_len = max_model_len
-        config = AutoConfig.from_pretrained(
-            self.model_path,
-            label2id=label2id,
-            finetuning_task="text-classification",
-            revision="main",
-        )
-        config.num_labels = len(set(label2id.values()))
-        config.problem_type = "single_label_classification"
+        self.model_path = model_path
+        self.model_name = self.model_path.split("/")[-1]
         self.tokenizer = AutoTokenizer.from_pretrained(
-            self.model_path, use_fast=True, revision="main"
+            model_path, use_fast=True, revision="main"
         )
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            self.model_path,
-            config=config,
-            revision="main",
-            ignore_mismatched_sizes=False,
-        )
-        self.entailment_label = label2id.get("entailment", 0)
+        self.max_model_len = max_model_len
+
+        # reserve some space (hard coded, 200) for the claim to be checked
+        self.default_chunk_size = self.max_model_len - 200
+        assert self.default_chunk_size > 0
+
         self.device = device
         self.batch_size = batch_size
-        self.default_chunk_size = (
-            self.max_model_len - 200
-        )  # reserve some space (hard coded) for the claim to be checked
-        assert self.default_chunk_size > 0
-        self.model.to(device)
-        self.model.eval()
 
-    @override
     def score(self, doc: str, claim: str) -> float:
         doc_chunk_gen = generate_chunks(doc, self.default_chunk_size)
         max_entailment_prob = 0.0
@@ -106,18 +72,23 @@ class XBERTForNLI(Scorer):
             batch_input = self._batch_tokenize(doc_batch, claim)
             batch_input = {k: v.to(self.device) for k, v in batch_input.items()}
             with torch.no_grad():
-                logits = self.model(**batch_input).logits.cpu()
-                label_probs = torch.nn.functional.softmax(logits, dim=1)
-                current_max_prob = label_probs[:, self.entailment_label].max().item()
+                probs = self._infer_batch(batch_input)
+                current_max_prob = probs.max().item()
             if current_max_prob > max_entailment_prob:
                 max_entailment_prob = current_max_prob
         return max_entailment_prob
 
+    @abstractmethod
+    def _infer_batch(self, batch_input: Dict[str, torch.Tensor]) -> torch.Tensor:
+        pass
+
+    @abstractmethod
+    def _concat_doc_and_claim(self, doc, claim):
+        pass
+
     def _batch_tokenize(self, doc_batch, claim):
-        eos_token = self.tokenizer.eos_token
-        original_text = [eos_token.join([doc, claim]) for doc in doc_batch]
         return self.tokenizer(
-            original_text,
+            [self._concat_doc_and_claim(doc, claim) for doc in doc_batch],
             max_length=self.max_model_len,
             truncation=True,
             padding=True,
@@ -125,133 +96,139 @@ class XBERTForNLI(Scorer):
         )
 
 
-class DeBERTaForNLI(XBERTForNLI):
+class XBERTForNLI(Scorer):
     def __init__(
         self,
+        model_path: str,
+        max_model_len: int,
         label2id: Dict,
         device: str,
         batch_size: int,
     ):
-        max_model_len = 2048
-        super().__init__(
-            max_model_len, label2id=label2id, device=device, batch_size=batch_size
+        super().__init__(model_path, max_model_len, device, batch_size)
+        config = AutoConfig.from_pretrained(
+            model_path,
+            label2id=label2id,
+            finetuning_task="text-classification",
+            revision="main",
         )
-
-
-class RoBERTaForNLI(XBERTForNLI):
-    def __init__(
-        self,
-        label2id: Dict,
-        device: str,
-        batch_size: int,
-    ):
-        max_model_len = 512
-        super().__init__(
-            max_model_len, label2id=label2id, device=device, batch_size=batch_size
+        config.num_labels = len(set(label2id.values()))
+        config.problem_type = "single_label_classification"
+        self.model = AutoModelForSequenceClassification.from_pretrained(
+            model_path,
+            config=config,
+            revision="main",
+            ignore_mismatched_sizes=False,
         )
-
-
-class MiniCheckDeBERTa(DeBERTaForNLI):
-    model_path = "lytang/MiniCheck-DeBERTa-v3-Large"
-
-    def __init__(
-        self,
-        device: str = DEFAULT_DEVICE,
-        batch_size: int = DEFAULT_BATCH_SIZE // 4,
-    ):
-        label2id = {"not_entailment": 0, "entailment": 1}
-        super().__init__(label2id, device, batch_size)
-
-
-class OurTrainedRoBERTa(RoBERTaForNLI):
-    model_path = "./our_trained_roberta_large"
-
-    def __init__(
-        self,
-        device: str = DEFAULT_DEVICE,
-        batch_size: int = DEFAULT_BATCH_SIZE,
-    ):
-        label2id = {"entailment": 0, "neutral": 1, "contradiction": 2}
-        super().__init__(label2id, device, batch_size)
-
-
-class PreTrainedRoBERTa(RoBERTaForNLI):
-    model_path = "ynie/roberta-large-snli_mnli_fever_anli_R1_R2_R3-nli"
-
-    def __init__(
-        self,
-        device: str = DEFAULT_DEVICE,
-        batch_size: int = DEFAULT_BATCH_SIZE,
-    ):
-        label2id = {"entailment": 0, "neutral": 1, "contradiction": 2}
-        super().__init__(label2id, device, batch_size)
-
-
-class MiniCheckRoBERTa(RoBERTaForNLI):
-    model_path = "lytang/MiniCheck-RoBERTa-Large"
-
-    def __init__(
-        self,
-        device: str = DEFAULT_DEVICE,
-        batch_size: int = DEFAULT_BATCH_SIZE,
-    ):
-        label2id = {"not_entailment": 0, "entailment": 1}
-        super().__init__(label2id, device, batch_size)
-
-
-class MiniCheckFlanT5(Scorer):
-    model_path = "lytang/MiniCheck-Flan-T5-Large"
-
-    def __init__(
-        self, device: str = DEFAULT_DEVICE, batch_size: int = DEFAULT_BATCH_SIZE // 4
-    ):
-        self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_path)
-        self.tokenizer = AutoTokenizer.from_pretrained(self.model_path)
-        self.max_model_len = 2048
-        self.max_output_len = 256
-        self.device = device
-        self.batch_size = batch_size
-        self.default_chunk_size = (
-            self.max_model_len - 200
-        )  # reserve some space (hard coded) for the claim to be checked
+        self.entailment_label = label2id.get("entailment", 0)
         self.model.to(device)
         self.model.eval()
 
     @override
-    def score(self, doc: str, claim: str) -> float:
-        doc_chunk_gen = generate_chunks(doc, self.default_chunk_size)
-        max_support_prob = 0.0
-        for doc_batch in batched(doc_chunk_gen, self.batch_size):
-            doc_batch = list(doc_batch)
-            batch_input = self._batch_tokenize(doc_batch, claim)
-            batch_input = {k: v.to(self.device) for k, v in batch_input.items()}
-            with torch.no_grad():
-                decoder_input_ids = torch.zeros(
-                    (batch_input["input_ids"].size(0), 1), dtype=torch.long
-                ).to(self.device)
-                outputs = self.model(
-                    input_ids=batch_input["input_ids"],
-                    attention_mask=batch_input["attention_mask"],
-                    decoder_input_ids=decoder_input_ids,
-                )
-                logits = outputs.logits.squeeze(1)
+    def _infer_batch(self, batch_input):
+        logits = self.model(**batch_input).logits.cpu()
+        label_probs = torch.nn.functional.softmax(logits, dim=1)
+        return label_probs[:, self.entailment_label]
 
-                # 3 for no support and 209 for support
-                label_logits = logits[:, torch.tensor([3, 209])].cpu()
-                label_probs = torch.nn.functional.softmax(label_logits, dim=-1)
-                current_max_prob = label_probs[:, 1].max().item()
-
-            if current_max_prob > max_support_prob:
-                max_support_prob = current_max_prob
-        return max_support_prob
-
-    def _batch_tokenize(self, doc_batch, claim):
+    @override
+    def _concat_doc_and_claim(self, doc, claim):
         eos_token = self.tokenizer.eos_token
-        original_text = [eos_token.join([doc, claim]) for doc in doc_batch]
-        return self.tokenizer(
-            ["predict: " + text for text in original_text],
-            max_length=self.max_model_len,
-            truncation=True,
-            padding=True,
-            return_tensors="pt",
+        return eos_token.join([doc, claim])
+
+
+class MiniCheckDeBERTa(XBERTForNLI):
+    def __init__(
+        self,
+        model_path: str = "lytang/MiniCheck-DeBERTa-v3-Large",
+        max_model_len: int = 2048,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE // 4,
+    ):
+        label2id = {"not_entailment": 0, "entailment": 1}
+        super().__init__(model_path, max_model_len, label2id, device, batch_size)
+
+
+# ref: https://github.com/derenlei/FactCG/blob/main/factcg/inference.py
+class FactCGDeBERTa(XBERTForNLI):
+    def __init__(
+        self,
+        model_path: str = "yaxili96/FactCG-DeBERTa-v3-Large",
+        max_model_len: int = 2048,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE // 4,
+    ):
+        label2id = {"not_entailment": 0, "entailment": 1}
+        super().__init__(model_path, max_model_len, label2id, device, batch_size)
+
+    @override
+    def _concat_doc_and_claim(self, doc, claim):
+        return (
+            "{text_a}\n"
+            "\n"
+            'Choose your answer: based on the paragraph above can we conclude that "{text_b}"?\n'
+            "\n"
+            "OPTIONS:\n"
+            "- Yes\n"
+            "- No\n"
+            "I think the answer is ".format(text_a=doc, text_b=claim)
         )
+
+
+class PreTrainedRoBERTa(XBERTForNLI):
+    def __init__(
+        self,
+        model_path: str = "ynie/roberta-large-snli_mnli_fever_anli_R1_R2_R3-nli",
+        max_model_len: int = 512,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ):
+        label2id = {"entailment": 0, "neutral": 1, "contradiction": 2}
+        super().__init__(model_path, max_model_len, label2id, device, batch_size)
+
+
+class MiniCheckRoBERTa(XBERTForNLI):
+    def __init__(
+        self,
+        model_path: str = "lytang/MiniCheck-RoBERTa-Large",
+        max_model_len: int = 512,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ):
+        label2id = {"not_entailment": 0, "entailment": 1}
+        super().__init__(model_path, max_model_len, label2id, device, batch_size)
+
+
+# ref: https://github.com//Liyan06/MiniCheck/blob/main/minicheck/inference.py
+class MiniCheckFlanT5(Scorer):
+    def __init__(
+        self,
+        model_path: str = "lytang/MiniCheck-Flan-T5-Large",
+        max_model_len: int = 2048,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE // 4,
+    ):
+        super().__init__(model_path, max_model_len, device, batch_size)
+        self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_path)
+        self.model.to(device)
+        self.model.eval()
+
+    @override
+    def _infer_batch(self, batch_input):
+        decoder_input_ids = torch.zeros(
+            (batch_input["input_ids"].size(0), 1), dtype=torch.long
+        ).to(self.device)
+        outputs = self.model(
+            input_ids=batch_input["input_ids"],
+            attention_mask=batch_input["attention_mask"],
+            decoder_input_ids=decoder_input_ids,
+        )
+        logits = outputs.logits.squeeze(1)
+
+        # 3 for no support and 209 for support
+        label_logits = logits[:, torch.tensor([3, 209])].cpu()
+        label_probs = torch.nn.functional.softmax(label_logits, dim=-1)
+        return label_probs[:, 1]
+
+    @override
+    def _concat_doc_and_claim(self, doc, claim):
+        return "predict: " + self.tokenizer.eos_token.join([doc, claim])

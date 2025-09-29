@@ -12,10 +12,10 @@ from huggingface_hub import login
 from tqdm import tqdm
 
 from scorer import (
+    FactCGDeBERTa,
     MiniCheckDeBERTa,
     MiniCheckFlanT5,
     MiniCheckRoBERTa,
-    OurTrainedRoBERTa,
     PreTrainedRoBERTa,
     Scorer,
 )
@@ -37,11 +37,11 @@ def main():
     llm_aggrefact_subset = load_from_disk(SUBSET_PATH).shuffle(seed=42)
 
     scoreres: Scorer = [
+        FactCGDeBERTa(),
         MiniCheckDeBERTa(),
-        OurTrainedRoBERTa(),
-        PreTrainedRoBERTa(),
-        MiniCheckRoBERTa(),
         MiniCheckFlanT5(),
+        MiniCheckRoBERTa(),
+        PreTrainedRoBERTa(),
     ]
 
     for scorer in scoreres:
