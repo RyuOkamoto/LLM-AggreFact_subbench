@@ -9,6 +9,7 @@ dependencies = [
     "huggingface-hub>=0.34.4",
     "ipython>=9.5.0",
     "nltk>=3.9.1",
+    "pytest>=8.4.2",
     "python-dotenv>=1.1.1",
     "ruff>=0.13.0",
     "scikit-learn>=1.7.2",

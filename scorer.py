@@ -36,6 +36,33 @@ def generate_chunks(text: str, chunk_size: int) -> Generator[str, None, None]:
             yield chunk
 
 
+def generate_sliding_chunks(text: str, chunk_size: int, stride: int = 1) -> Generator[str, None, None]:
+    sentences = sent_tokenize_with_newlines(text) or [""]
+    assert stride > 0 and stride < len(sentences)
+
+    current_chunks = []
+    current_word_count = 0
+    for i in range(0, len(sentences), stride):
+        j_achive_end = False
+        for j in range(i, len(sentences)):
+            sentence = sentences[j]
+            sentence_word_count = len(word_tokenize(sentence))
+            if current_word_count + sentence_word_count > chunk_size:
+                break
+            current_chunks.append(sentence)
+            current_word_count += sentence_word_count
+            if j == len(sentences) - 1:
+                j_achive_end = True
+
+        chunk = " ".join(current_chunks).replace(" \n ", "\n").strip()
+        if chunk:
+            yield chunk
+            if j_achive_end:
+                return
+        current_chunks = []
+        current_word_count = 0
+
+
 def sent_tokenize_with_newlines(text: str) -> List[str]:
     blocks = [sent_tokenize(block) for block in text.split("\n")]
     sentences = []
