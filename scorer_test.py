@@ -16,7 +16,7 @@ def test_sent_tokenize_with_newline():
         "This is the second sentence.",
         "\n",
         "\n",
-        "This is the forth sentence", 
+        "This is the forth sentence",
         "\n",
         "(here is the part of the forth).",
     ]
@@ -48,7 +48,7 @@ def test_generate_sliding_chunks():
         "This is the 4th sentence.",
     ]
     text = " ".join(text_list)
-    chunk_size =  3 * len(word_tokenize(text_list[0])) + 1
+    chunk_size = 3 * len(word_tokenize(text_list[0])) + 1
 
     expected = [
         "This is the 1st sentence. This is the 2nd sentence. This is the 3rd sentence.",

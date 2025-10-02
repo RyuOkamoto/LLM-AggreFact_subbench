@@ -36,7 +36,9 @@ def generate_chunks(text: str, chunk_size: int) -> Generator[str, None, None]:
             yield chunk
 
 
-def generate_sliding_chunks(text: str, chunk_size: int, stride: int = 1) -> Generator[str, None, None]:
+def generate_sliding_chunks(
+    text: str, chunk_size: int, stride: int = 1
+) -> Generator[str, None, None]:
     sentences = sent_tokenize_with_newlines(text) or [""]
     assert stride > 0 and stride < len(sentences)
 
