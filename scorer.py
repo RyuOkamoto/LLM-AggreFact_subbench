@@ -94,7 +94,7 @@ class Scorer(ABC):
         self.batch_size = batch_size
 
     def score(self, doc: str, claim: str) -> float:
-        doc_chunk_gen = generate_chunks(doc, self.default_chunk_size)
+        doc_chunk_gen = generate_sliding_chunks(doc, self.default_chunk_size, 5)
         max_entailment_prob = 0.0
         for doc_batch in batched(doc_chunk_gen, self.batch_size):
             doc_batch = list(doc_batch)
