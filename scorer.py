@@ -45,7 +45,7 @@ def generate_sliding_chunks(
     current_chunks = []
     current_word_count = 0
     for i in range(0, len(sentences), stride):
-        j_achive_end = False
+        j_acheive_end = False
         for j in range(i, len(sentences)):
             sentence = sentences[j]
             sentence_word_count = len(word_tokenize(sentence))
@@ -54,12 +54,12 @@ def generate_sliding_chunks(
             current_chunks.append(sentence)
             current_word_count += sentence_word_count
             if j == len(sentences) - 1:
-                j_achive_end = True
+                j_acheive_end = True
 
         chunk = " ".join(current_chunks).replace(" \n ", "\n").strip()
         if chunk:
             yield chunk
-            if j_achive_end:
+            if j_acheive_end:
                 return
         current_chunks = []
         current_word_count = 0
@@ -94,7 +94,7 @@ class Scorer(ABC):
         self.batch_size = batch_size
 
     def score(self, doc: str, claim: str) -> float:
-        doc_chunk_gen = generate_sliding_chunks(doc, self.default_chunk_size)
+        doc_chunk_gen = generate_chunks(doc, self.default_chunk_size)
         max_entailment_prob = 0.0
         for doc_batch in batched(doc_chunk_gen, self.batch_size):
             doc_batch = list(doc_batch)
@@ -227,17 +227,20 @@ class MiniCheckRoBERTa(XBERTForNLI):
         super().__init__(model_path, max_model_len, label2id, device, batch_size)
 
 
-# ref: https://github.com//Liyan06/MiniCheck/blob/main/minicheck/inference.py
-class MiniCheckFlanT5(Scorer):
+class T5ForNLI(Scorer):
     def __init__(
         self,
-        model_path: str = "lytang/MiniCheck-Flan-T5-Large",
-        max_model_len: int = 2048,
-        device: str = DEFAULT_DEVICE,
-        batch_size: int = DEFAULT_BATCH_SIZE // 4,
+        model_path: str,
+        max_model_len: int,
+        pos_token_id: int,
+        neg_token_id: int,
+        device: str,
+        batch_size: int,
     ):
         super().__init__(model_path, max_model_len, device, batch_size)
         self.model = AutoModelForSeq2SeqLM.from_pretrained(self.model_path)
+        self.pos_token_id = pos_token_id
+        self.neg_token_id = neg_token_id
         self.model.to(device)
         self.model.eval()
 
@@ -252,12 +255,41 @@ class MiniCheckFlanT5(Scorer):
             decoder_input_ids=decoder_input_ids,
         )
         logits = outputs.logits.squeeze(1)
-
-        # 3 for no support and 209 for support
-        label_logits = logits[:, torch.tensor([3, 209])].cpu()
+        label_logits = logits[:, torch.tensor([self.neg_token_id, self.pos_token_id])].cpu()
         label_probs = torch.nn.functional.softmax(label_logits, dim=-1)
         return label_probs[:, 1]
+
+
+# ref: https://github.com//Liyan06/MiniCheck/blob/main/minicheck/inference.py
+class MiniCheckFlanT5(T5ForNLI):
+    def __init__(
+        self,
+        model_path: str = "lytang/MiniCheck-Flan-T5-Large",
+        max_model_len: int = 2048,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE // 4,
+    ):
+        pos_token_id = 209
+        neg_token_id = 3
+        super().__init__(model_path, max_model_len, pos_token_id, neg_token_id, device, batch_size)
 
     @override
     def _concat_doc_and_claim(self, doc, claim):
         return "predict: " + self.tokenizer.eos_token.join([doc, claim])
+
+
+class TRUE_T5(T5ForNLI):
+    def __init__(
+        self,
+        model_path: str = "google/t5_xxl_true_nli_mixture",
+        max_model_len: int = 512,
+        device: str = DEFAULT_DEVICE,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ):
+        pos_token_id = 209
+        neg_token_id = 632
+        super().__init__(model_path, max_model_len, pos_token_id, neg_token_id, device, batch_size)
+
+    @override
+    def _concat_doc_and_claim(self, doc, claim):
+        return f"premise: {doc} hypothesis: {claim}"

@@ -16,6 +16,7 @@ from scorer import (
     MiniCheckDeBERTa,
     MiniCheckFlanT5,
     MiniCheckRoBERTa,
+    # TRUE_T5,
     PreTrainedRoBERTa,
     Scorer,
 )
@@ -41,6 +42,7 @@ def main():
         MiniCheckDeBERTa(),
         MiniCheckFlanT5(),
         MiniCheckRoBERTa(),
+        # TRUE_T5(),  very huge!!
         PreTrainedRoBERTa(),
     ]
 
