@@ -30,7 +30,7 @@ nltk.download("punkt")
 SUBSET_PATH = "LLM-AggreFact_subset"
 POSITIVE_LABEL = 1
 
-OUTPUT_DIR = Path("./results")
+OUTPUT_DIR = Path("./results") / "with_sliding_stride=3"
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 
